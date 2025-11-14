@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
+import { Helmet } from 'react-helmet-async'
 import './App.css'
 
 type Reward = {
@@ -48,6 +49,25 @@ const rewards: Reward[] = [
   },
 ]
 
+const infoDetails = [
+  {
+    title: 'วิธีเล่น',
+    items: [
+      'เลือกการ์ดที่ชอบแล้วคลิกเพื่อทำเครื่องหมาย',
+      'คลิกการ์ดเดิมอีกครั้งหรือกดปุ่ม Open Card เพื่อสุ่มรางวัล',
+      'ปิดหน้าต่างรางวัลเพื่อเริ่มรอบใหม่ ระบบจะสับไพ่ให้อัตโนมัติ',
+    ],
+  },
+  {
+    title: 'ฟีเจอร์เด่น',
+    items: [
+      'แอนิเมชันสับไพ่และเปิดการ์ดเพื่อเพิ่มความลุ้น',
+      'บันทึกประวัติรางวัล 10 รายการล่าสุดพร้อมวันและเวลา',
+      'สามารถย่อ/ขยายรายการรางวัลและล้างประวัติได้เมื่อพร้อมเริ่มใหม่',
+    ],
+  },
+] as const
+
 const cardGridVariants = {
   hidden: { opacity: 0, y: 20 },
   visible: {
@@ -68,6 +88,13 @@ const historyItemVariants = {
   exit: { opacity: 0, y: -10 },
 } as const
 
+// Helper to generate random shuffle position
+const getShufflePosition = () => ({
+  x: Math.random() * 40 - 20, // -20 to 20
+  y: Math.random() * 30 - 15, // -15 to 15
+  rotate: Math.random() * 16 - 8, // -8 to 8 degrees
+})
+
 function App() {
   const [selectedCard, setSelectedCard] = useState<number | null>(null)
   const [currentReward, setCurrentReward] = useState<Reward | null>(null)
@@ -76,6 +103,8 @@ function App() {
   )
   const [isDrawing, setIsDrawing] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isShuffle, setIsShuffle] = useState(false)
+  const [flippingCard, setFlippingCard] = useState<number | null>(null)
   const [history, setHistory] = useState<HistoryEntry[]>(() => {
     if (typeof window === 'undefined') return []
     try {
@@ -86,6 +115,8 @@ function App() {
       return []
     }
   })
+  const [isHistoryVisible, setIsHistoryVisible] = useState(true)
+  const [isInfoOpen, setIsInfoOpen] = useState(false)
 
   const cards = useMemo(() => Array.from({ length: 4 }, (_, idx) => idx), [])
 
@@ -95,9 +126,14 @@ function App() {
   }, [history])
 
   const handleCardSelect = (index: number) => {
-    // If clicking the same card again, open it directly
+    // If clicking the same card again, trigger flip animation then open it
     if (selectedCard === index) {
-      handleDraw()
+      setFlippingCard(index)
+      // Wait for flip animation to complete before opening
+      setTimeout(() => {
+        handleDraw()
+        setFlippingCard(null)
+      }, 600)
       return
     }
 
@@ -134,6 +170,15 @@ function App() {
 
   const handleCloseModal = () => {
     setIsModalOpen(false)
+    // Trigger shuffle animation for new game
+    setIsShuffle(true)
+    setSelectedCard(null)
+    setCurrentReward(null)
+    setStatusMessage('Pick one of the four cards below to begin.')
+    // Reset shuffle after animation completes
+    setTimeout(() => {
+      setIsShuffle(false)
+    }, 800)
   }
 
   const handleClearHistory = () => {
@@ -144,183 +189,280 @@ function App() {
   }
 
   return (
-    <main className="reward-app">
-      <header className="reward-header">
-        <p className="eyebrow">Devsmith Rewards Lab</p>
-        <h1>Spin, Draw, or Reveal</h1>
-        <p>
-          Four hidden cards are waiting. Select your favorite, then press the
-          button to randomly unlock one of our featured rewards.
-        </p>
-      </header>
+    <>
+      <Helmet>
+        <title>Devsmith Rewards Lab - Spin, Draw, or Reveal</title>
+        <meta name="description" content="Interactive reward card game from Devsmith. Pick cards, unlock surprises, and win exclusive rewards including mugs, coupons, stickers, and mystery add-ons!" />
+        <meta name="keywords" content="devsmith, rewards, card game, interactive, mugs, coupons, stickers, mystery" />
+        <meta property="og:title" content="Devsmith Rewards Lab - Interactive Card Game" />
+        <meta property="og:description" content="Experience the thrill of our interactive reward card game. Select cards, reveal surprises, and discover exclusive Devsmith rewards!" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Devsmith Rewards Lab" />
+        <meta name="twitter:description" content="Interactive reward card game with exclusive prizes and surprises!" />
+      </Helmet>
+      <main className="reward-app">
+        <header className="reward-header">
+          <p className="eyebrow">Devsmith Rewards Lab</p>
+          <h1>Spin, Draw, or Reveal</h1>
+          <p>
+            Four hidden cards are waiting. Select your favorite, then press the
+            button to randomly unlock one of our featured rewards.
+          </p>
+        </header>
 
-      <motion.section
-        className="card-grid"
-        aria-label="Reward cards"
-        initial="hidden"
-        animate="visible"
-        variants={cardGridVariants}
-      >
-        {cards.map((cardIndex) => {
-          const isSelected = selectedCard === cardIndex
-          return (
-            <motion.button
-              key={cardIndex}
-              className={`mystery-card${isSelected ? ' selected' : ''}`}
-              type="button"
-              onClick={() => handleCardSelect(cardIndex)}
-              variants={cardVariants}
-              whileHover={{ y: -6 }}
-              whileTap={{ scale: 0.97 }}
-              animate={{ scale: isSelected ? 1.05 : 1 }}
-              transition={{ type: 'spring', stiffness: 260, damping: 20 }}
-            >
-              <span className="card-number">Card {cardIndex + 1}</span>
-              <span className="card-instruction">
-                {isSelected ? 'Click to open' : 'Tap to choose'}
-              </span>
-            </motion.button>
-          )
-        })}
-      </motion.section>
+        <section className="info-section">
+          <button
+            type="button"
+            className="info-button"
+            onClick={() => setIsInfoOpen((prev) => !prev)}
+            aria-expanded={isInfoOpen}
+            aria-controls="game-info-panel"
+          >
+            <span className="info-icon" aria-hidden="true">
+              ℹ️
+            </span>
+            <span>{isInfoOpen ? 'ซ่อนข้อมูล' : 'ข้อมูลการเล่น'}</span>
+          </button>
+          <AnimatePresence initial={false}>
+            {isInfoOpen && (
+              <motion.div
+                id="game-info-panel"
+                className="info-panel"
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+              >
+                {infoDetails.map(({ title, items }) => (
+                  <div key={title} className="info-group">
+                    <h3>{title}</h3>
+                    <ul>
+                      {items.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </section>
 
-      <div className="actions">
-        <motion.button
-          type="button"
-          className="draw-button"
-          onClick={handleDraw}
-          disabled={isDrawing || selectedCard === null}
-          whileHover={
-            isDrawing || selectedCard === null ? undefined : { scale: 1.05 }
-          }
-          whileTap={isDrawing || selectedCard === null ? undefined : { scale: 0.96 }}
-          animate={{ opacity: isDrawing || selectedCard === null ? 0.6 : 1 }}
-          transition={{ duration: 0.2 }}
+        <motion.section
+          className="card-grid"
+          aria-label="Reward cards"
+          initial="hidden"
+          animate="visible"
+          variants={cardGridVariants}
         >
-          {isDrawing ? 'Drawing…' : 'Open Card'}
-        </motion.button>
-      </div>
+          {cards.map((cardIndex) => {
+            const isSelected = selectedCard === cardIndex
+            const isFlipping = flippingCard === cardIndex
+            const shufflePos = isShuffle ? getShufflePosition() : { x: 0, y: 0, rotate: 0 }
 
-      <section className="result-panel" aria-live="polite">
-        <p className="status-message">{statusMessage}</p>
-        <AnimatePresence mode="wait">
-          {currentReward && (
+            return (
+              <motion.button
+                key={cardIndex}
+                className={`mystery-card${isSelected ? ' selected' : ''}`}
+                type="button"
+                onClick={() => handleCardSelect(cardIndex)}
+                variants={cardVariants}
+                whileHover={{ y: -6 }}
+                whileTap={{ scale: 0.97 }}
+                animate={{
+                  scale: isSelected ? 1.05 : 1,
+                  rotateY: isFlipping ? 360 : 0,
+                  ...shufflePos,
+                }}
+                transition={{
+                  scale: { type: 'spring', stiffness: 260, damping: 20 },
+                  rotateY: { duration: 0.6, ease: 'easeInOut' },
+                  x: { duration: 0.5, ease: 'easeOut' },
+                  y: { duration: 0.5, ease: 'easeOut' },
+                  rotate: { duration: 0.5, ease: 'easeOut' },
+                }}
+                style={{
+                  zIndex: isFlipping ? 10 : 1,
+                  position: 'relative',
+                }}
+              >
+                <img
+                  src="/logo-ds-stk 1.png"
+                  alt="Devsmith Logo"
+                  className="card-logo"
+                />
+                {isSelected && (
+                  <span className="card-number">Card {cardIndex + 1}</span>
+                )}
+                <span className="card-instruction">
+                  {isSelected ? 'Click to open' : 'Tap to choose'}
+                </span>
+              </motion.button>
+            )
+          })}
+        </motion.section>
+
+        <div className="actions">
+          <motion.button
+            type="button"
+            className="draw-button"
+            onClick={handleDraw}
+            disabled={isDrawing || selectedCard === null}
+            whileHover={
+              isDrawing || selectedCard === null ? undefined : { scale: 1.05 }
+            }
+            whileTap={isDrawing || selectedCard === null ? undefined : { scale: 0.96 }}
+            animate={{ opacity: isDrawing || selectedCard === null ? 0.6 : 1 }}
+            transition={{ duration: 0.2 }}
+          >
+            {isDrawing ? 'Drawing…' : 'Open Card'}
+          </motion.button>
+        </div>
+
+        <section className="result-panel" aria-live="polite">
+          <p className="status-message">{statusMessage}</p>
+          <AnimatePresence mode="wait">
+            {currentReward && (
+              <motion.div
+                key={currentReward.id}
+                className="reward-result"
+                initial={{ opacity: 0, y: 18, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -18, scale: 0.95 }}
+                transition={{ duration: 0.35, ease: 'easeOut' }}
+              >
+                <span className="reward-icon" aria-hidden="true">
+                  {currentReward.icon}
+                </span>
+                <div>
+                  <h2>{currentReward.title}</h2>
+                  <p>{currentReward.description}</p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </section>
+
+        <section className="history-panel">
+          <div className="history-header">
+            <h2>Recent draws</h2>
+            <div className="history-actions">
+              <button
+                type="button"
+                className="toggle-history"
+                onClick={() => setIsHistoryVisible(!isHistoryVisible)}
+                aria-label={isHistoryVisible ? 'Hide history' : 'Show history'}
+              >
+                {isHistoryVisible ? '▲' : '▼'}
+              </button>
+              {history.length > 0 && (
+                <button
+                  type="button"
+                  className="clear-history"
+                  onClick={handleClearHistory}
+                >
+                  Clear history
+                </button>
+              )}
+            </div>
+          </div>
+          <AnimatePresence initial={false}>
+            {isHistoryVisible && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.3, ease: 'easeInOut' }}
+                style={{ overflow: 'hidden' }}
+              >
+                {history.length === 0 ? (
+                  <p className="history-empty">No draws yet. Your rewards will show up here.</p>
+                ) : (
+                  <ol className="history-list">
+                    <AnimatePresence initial={false}>
+                      {history.map((entry) => (
+                        <motion.li
+                          key={entry.id}
+                          className="history-item"
+                          layout
+                          variants={historyItemVariants}
+                          initial="hidden"
+                          animate="visible"
+                          exit="exit"
+                          transition={{ duration: 0.25 }}
+                        >
+                          <span className="history-icon" aria-hidden="true">
+                            {entry.rewardIcon}
+                          </span>
+                          <div className="history-details">
+                            <p className="history-title">{entry.rewardTitle}</p>
+                            <p className="history-meta">
+                              Card {entry.cardNumber} ·{' '}
+                              {new Date(entry.timestamp).toLocaleString(undefined, {
+                                hour: 'numeric',
+                                minute: '2-digit',
+                                month: 'short',
+                                day: 'numeric',
+                              })}
+                            </p>
+                          </div>
+                        </motion.li>
+                      ))}
+                    </AnimatePresence>
+                  </ol>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </section>
+
+        <AnimatePresence>
+          {isModalOpen && currentReward && (
             <motion.div
-              key={currentReward.id}
-              className="reward-result"
-              initial={{ opacity: 0, y: 18, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -18, scale: 0.95 }}
-              transition={{ duration: 0.35, ease: 'easeOut' }}
+              className="modal-backdrop"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="reward-modal-title"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
             >
-              <span className="reward-icon" aria-hidden="true">
-                {currentReward.icon}
-              </span>
-              <div>
-                <h2>{currentReward.title}</h2>
+              <motion.div
+                className="reward-modal"
+                initial={{ opacity: 0, y: 40, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 30, scale: 0.9 }}
+                transition={{ type: 'spring', stiffness: 240, damping: 24 }}
+              >
+                <button
+                  type="button"
+                  className="modal-close"
+                  onClick={handleCloseModal}
+                  aria-label="Close reward dialog"
+                >
+                  ×
+                </button>
+                <p className="modal-eyebrow">You earned</p>
+                <h2 id="reward-modal-title">{currentReward.title}</h2>
+                <span className="modal-icon" aria-hidden="true">
+                  {currentReward.icon}
+                </span>
                 <p>{currentReward.description}</p>
-              </div>
+                <button
+                  type="button"
+                  className="modal-close-button"
+                  onClick={handleCloseModal}
+                >
+                  Keep exploring
+                </button>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
-      </section>
-
-      <section className="history-panel">
-        <div className="history-header">
-          <h2>Recent draws</h2>
-          {history.length > 0 && (
-            <button
-              type="button"
-              className="clear-history"
-              onClick={handleClearHistory}
-            >
-              Clear history
-            </button>
-          )}
-        </div>
-        {history.length === 0 ? (
-          <p className="history-empty">No draws yet. Your rewards will show up here.</p>
-        ) : (
-          <ol className="history-list">
-            <AnimatePresence initial={false}>
-              {history.map((entry) => (
-                <motion.li
-                  key={entry.id}
-                  className="history-item"
-                  layout
-                  variants={historyItemVariants}
-                  initial="hidden"
-                  animate="visible"
-                  exit="exit"
-                  transition={{ duration: 0.25 }}
-                >
-                  <span className="history-icon" aria-hidden="true">
-                    {entry.rewardIcon}
-                  </span>
-                  <div className="history-details">
-                    <p className="history-title">{entry.rewardTitle}</p>
-                    <p className="history-meta">
-                      Card {entry.cardNumber} ·{' '}
-                      {new Date(entry.timestamp).toLocaleString(undefined, {
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        month: 'short',
-                        day: 'numeric',
-                      })}
-                    </p>
-                  </div>
-                </motion.li>
-              ))}
-            </AnimatePresence>
-          </ol>
-        )}
-      </section>
-
-      <AnimatePresence>
-        {isModalOpen && currentReward && (
-          <motion.div
-            className="modal-backdrop"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="reward-modal-title"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            <motion.div
-              className="reward-modal"
-              initial={{ opacity: 0, y: 40, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 30, scale: 0.9 }}
-              transition={{ type: 'spring', stiffness: 240, damping: 24 }}
-            >
-              <button
-                type="button"
-                className="modal-close"
-                onClick={handleCloseModal}
-                aria-label="Close reward dialog"
-              >
-                ×
-              </button>
-              <p className="modal-eyebrow">You earned</p>
-              <h2 id="reward-modal-title">{currentReward.title}</h2>
-              <span className="modal-icon" aria-hidden="true">
-                {currentReward.icon}
-              </span>
-              <p>{currentReward.description}</p>
-              <button
-                type="button"
-                className="modal-close-button"
-                onClick={handleCloseModal}
-              >
-                Keep exploring
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </main>
+      </main>
+    </>
   )
 }
 
